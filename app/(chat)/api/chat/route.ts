@@ -315,9 +315,10 @@ export async function POST(request: Request) {
             parameters: z.object({
               topic: z.string().describe('The topic or question to research'),
             }),
-            execute: async ({ topic, maxDepth = 7 }) => {
+            execute: async ({ topic, maxDepth = 3 }) => {
               const startTime = Date.now();
-              const timeLimit = 4.5 * 60 * 1000; // 4 minutes 30 seconds in milliseconds
+              // Adjust time limit to be compatible with Vercel serverless function limits
+              const timeLimit = 2.5 * 60 * 1000; // 2 minutes 30 seconds in milliseconds
 
               const researchState = {
                 findings: [] as Array<{ text: string; source: string }>,
@@ -328,7 +329,8 @@ export async function POST(request: Request) {
                 failedAttempts: 0,
                 maxFailedAttempts: 3,
                 completedSteps: 0,
-                totalExpectedSteps: maxDepth * 5,
+                // Reduce the expected steps based on reduced maxDepth
+                totalExpectedSteps: maxDepth * 3,
               };
 
               // Initialize progress tracking
@@ -345,10 +347,14 @@ export async function POST(request: Request) {
                 title: string;
                 description: string;
               }) => {
-                dataStream.writeData({
-                  type: 'source-delta',
-                  content: source,
-                });
+                try {
+                  dataStream.writeData({
+                    type: 'source-delta',
+                    content: source,
+                  });
+                } catch (error) {
+                  console.error('Error adding source:', error);
+                }
               };
 
               const addActivity = (activity: {
@@ -368,16 +374,29 @@ export async function POST(request: Request) {
                   researchState.completedSteps++;
                 }
 
-                dataStream.writeData({
-                  type: 'activity-delta',
-                  content: {
-                    ...activity,
-                    depth: researchState.currentDepth,
-                    completedSteps: researchState.completedSteps,
-                    totalSteps: researchState.totalExpectedSteps,
-                  },
-                });
+                try {
+                  dataStream.writeData({
+                    type: 'activity-delta',
+                    content: {
+                      ...activity,
+                      depth: researchState.currentDepth,
+                      completedSteps: researchState.completedSteps,
+                      totalSteps: researchState.totalExpectedSteps,
+                    },
+                  });
+                } catch (error) {
+                  console.error('Error adding activity:', error);
+                }
               };
+
+              // Add initial activity to show process is starting
+              addActivity({
+                type: 'thought',
+                status: 'complete',
+                message: `Starting research on "${topic}" (optimized for deployment)`,
+                timestamp: new Date().toISOString(),
+                depth: 0,
+              });
 
               const analyzeAndPlan = async (
                 findings: Array<{ text: string; source: string }>,
@@ -474,7 +493,17 @@ export async function POST(request: Request) {
               try {
                 while (researchState.currentDepth < maxDepth) {
                   const timeElapsed = Date.now() - startTime;
-                  if (timeElapsed >= timeLimit) {
+                  // Be more aggressive with time management
+                  if (timeElapsed >= timeLimit * 0.8) { // Use 80% of available time
+                    console.log("Time limit approaching, stopping research loop early");
+                    // Add an activity to inform the user
+                    addActivity({
+                      type: 'thought',
+                      status: 'complete',
+                      message: `Research time limit approaching, summarizing findings so far...`,
+                      timestamp: new Date().toISOString(),
+                      depth: researchState.currentDepth,
+                    });
                     break;
                   }
 
@@ -538,15 +567,17 @@ export async function POST(request: Request) {
                     });
                   });
 
-                  // Extract phase
+                  // Extract phase - Limit to just 2 URLs for efficiency
                   const topUrls = searchResult.data
-                    .slice(0, 3)
+                    .slice(0, 2)
                     .map((result: any) => result.url);
 
-                  const newFindings = await extractFromUrls([
-                    researchState.urlToSearch,
-                    ...topUrls,
-                  ]);
+                  // Only use urlToSearch if provided, otherwise use top results
+                  const urlsToExtract = researchState.urlToSearch 
+                    ? [researchState.urlToSearch] 
+                    : topUrls;
+
+                  const newFindings = await extractFromUrls(urlsToExtract);
                   researchState.findings.push(...newFindings);
 
                   // Analysis phase
@@ -599,7 +630,7 @@ export async function POST(request: Request) {
                   topic = analysis.gaps.shift() || topic;
                 }
 
-                // Final synthesis
+                // Final synthesis - Use a more efficient prompt
                 addActivity({
                   type: 'synthesis',
                   status: 'pending',
@@ -608,17 +639,21 @@ export async function POST(request: Request) {
                   depth: researchState.currentDepth,
                 });
 
+                // Limit the amount of data we're processing in the final synthesis
+                const limitedFindings = researchState.findings.slice(0, 10);
+                const limitedSummaries = researchState.summaries.slice(-3);
+                
                 const finalAnalysis = await generateText({
                   model: customModel(reasoningModel.apiIdentifier, true),
-                  maxTokens: 16000,
-                  prompt: `Create a comprehensive long analysis of ${topic} based on these findings:
-                          ${researchState.findings
+                  maxTokens: 4000, // Limit token usage
+                  prompt: `Create a concise but comprehensive analysis of ${topic} based on these findings:
+                          ${limitedFindings
                       .map((f) => `[From ${f.source}]: ${f.text}`)
                       .join('\n')}
-                          ${researchState.summaries
+                          ${limitedSummaries
                             .map((s) => `[Summary]: ${s}`)
                             .join('\n')}
-                          Provide all the thoughts processes including findings details,key insights, conclusions, and any remaining uncertainties. Include citations to sources where appropriate. This analysis should be very comprehensive and full of details. It is expected to be very long, detailed and comprehensive.`,
+                          Provide key insights, main conclusions, and remaining uncertainties. Include citations to sources where relevant. Be thorough but focused.`,
                 });
 
                 addActivity({
