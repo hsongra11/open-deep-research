@@ -45,7 +45,8 @@ export const login = async (
       await signIn('credentials', {
         email: validatedData.email,
         password: validatedData.password,
-        redirect: false,
+        redirect: true,
+        callbackUrl: '/'
       });
       
       console.log("Login successful");

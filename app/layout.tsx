@@ -5,6 +5,7 @@ import { PT_Serif } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Analytics } from '@vercel/analytics/react';
 import { HyperResearchProvider } from '@/lib/deep-research-context';
+import { AuthProvider } from '@/components/auth-provider';
 
 import './globals.css';
 
@@ -76,8 +77,10 @@ export default async function RootLayout({
           forcedTheme="dark"
         >
           <HyperResearchProvider>
-            <Toaster position="top-center" />
-            {children}
+            <AuthProvider>
+              <Toaster position="top-center" />
+              {children}
+            </AuthProvider>
           </HyperResearchProvider>
         </ThemeProvider>
         <Analytics />

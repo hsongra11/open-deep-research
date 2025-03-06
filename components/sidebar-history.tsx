@@ -73,11 +73,28 @@ const PureChatItem = ({
     chatId: chat.id,
     initialVisibility: chat.visibility,
   });
+  const router = useRouter();
+
+  const handleChatClick = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent default link behavior
+    setOpenMobile(false);
+    
+    // First refresh auth state and then navigate
+    try {
+      // Use client-side navigation that preserves state
+      router.push(`/chat/${chat.id}`);
+      
+      // Add a console log to help debug
+      console.log(`Navigating to chat: ${chat.id}`);
+    } catch (error) {
+      console.error("Navigation error:", error);
+    }
+  };
 
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive}>
-        <Link href={`/chat/${chat.id}`} onClick={() => setOpenMobile(false)}>
+        <Link href={`/chat/${chat.id}`} onClick={handleChatClick}>
           <span>{chat.title}</span>
         </Link>
       </SidebarMenuButton>
