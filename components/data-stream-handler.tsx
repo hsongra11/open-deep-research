@@ -60,120 +60,140 @@ export function DataStreamHandler({ id }: { id: string }) {
   useEffect(() => {
     if (!dataStream?.length) return;
 
-    const newDeltas = dataStream.slice(lastProcessedIndex.current + 1);
-    lastProcessedIndex.current = dataStream.length - 1;
+    try {
+      const newDeltas = dataStream.slice(lastProcessedIndex.current + 1);
+      lastProcessedIndex.current = dataStream.length - 1;
 
-    (newDeltas as DataStreamDelta[]).forEach((delta: DataStreamDelta) => {
-      if (delta.type === 'user-message-id') {
-        setUserMessageIdFromServer(delta.content as string);
-        return;
+      for (const delta of newDeltas) {
+        // Validate that delta is properly formed before processing
+        if (!delta || typeof delta !== 'object' || !('type' in delta)) {
+          console.warn('Received malformed delta:', delta);
+          continue;
+        }
+
+        const typedDelta = delta as DataStreamDelta;
+
+        if (typedDelta.type === 'user-message-id') {
+          setUserMessageIdFromServer(typedDelta.content as string);
+          continue;
+        }
+
+        setBlock((draftBlock) => {
+          if (!draftBlock) {
+            return { ...initialBlockData, status: 'streaming' };
+          }
+
+          switch (typedDelta.type) {
+            case 'id':
+              return {
+                ...draftBlock,
+                documentId: typedDelta.content as string,
+                status: 'streaming',
+              };
+
+            case 'title':
+              return {
+                ...draftBlock,
+                title: typedDelta.content as string,
+                status: 'streaming',
+              };
+
+            case 'kind':
+              return {
+                ...draftBlock,
+                kind: typedDelta.content as BlockKind,
+                status: 'streaming',
+              };
+
+            case 'text-delta':
+              return {
+                ...draftBlock,
+                content: draftBlock.content + (typedDelta.content as string),
+                isVisible:
+                  draftBlock.status === 'streaming' &&
+                  draftBlock.content.length > 400 &&
+                  draftBlock.content.length < 450
+                    ? true
+                    : draftBlock.isVisible,
+                status: 'streaming',
+              };
+
+            case 'code-delta':
+              return {
+                ...draftBlock,
+                content: typedDelta.content as string,
+                isVisible:
+                  draftBlock.status === 'streaming' &&
+                  draftBlock.content.length > 300 &&
+                  draftBlock.content.length < 310
+                    ? true
+                    : draftBlock.isVisible,
+                status: 'streaming',
+              };
+            case 'spreadsheet-delta':
+              return {
+                ...draftBlock,
+                content: typedDelta.content as string,
+                isVisible: true,
+                status: 'streaming',
+              };
+
+            case 'clear':
+              return {
+                ...draftBlock,
+                content: '',
+                status: 'streaming',
+              };
+
+            case 'finish':
+              return {
+                ...draftBlock,
+                status: 'idle',
+              };
+
+            case 'activity-delta':
+              try {
+                const activity = typedDelta.content as {
+                  type: 'search' | 'extract' | 'analyze' | 'thought' | 'reasoning';
+                  status: 'pending' | 'complete' | 'error';
+                  message: string;
+                  timestamp: string;
+                };
+                console.log("Adding activity:", activity); // Debug log
+                addActivity(activity);
+              } catch (err) {
+                console.error("Failed to process activity delta:", err);
+              }
+              return {
+                ...draftBlock,
+                status: 'streaming',
+              };
+
+            case 'source-delta':
+              try {
+                const source = typedDelta.content as {
+                  url: string;
+                  title: string;
+                  relevance: number;
+                };
+                console.log("Adding source:", source); // Debug log
+                addSource(source);
+              } catch (err) {
+                console.error("Failed to process source delta:", err);
+              }
+              return {
+                ...draftBlock,
+                status: 'streaming',
+              };
+
+            default:
+              return draftBlock;
+          }
+        });
       }
-
-      setBlock((draftBlock) => {
-        if (!draftBlock) {
-          return { ...initialBlockData, status: 'streaming' };
-        }
-
-        switch (delta.type) {
-          case 'id':
-            return {
-              ...draftBlock,
-              documentId: delta.content as string,
-              status: 'streaming',
-            };
-
-          case 'title':
-            return {
-              ...draftBlock,
-              title: delta.content as string,
-              status: 'streaming',
-            };
-
-          case 'kind':
-            return {
-              ...draftBlock,
-              kind: delta.content as BlockKind,
-              status: 'streaming',
-            };
-
-          case 'text-delta':
-            return {
-              ...draftBlock,
-              content: draftBlock.content + (delta.content as string),
-              isVisible:
-                draftBlock.status === 'streaming' &&
-                draftBlock.content.length > 400 &&
-                draftBlock.content.length < 450
-                  ? true
-                  : draftBlock.isVisible,
-              status: 'streaming',
-            };
-
-          case 'code-delta':
-            return {
-              ...draftBlock,
-              content: delta.content as string,
-              isVisible:
-                draftBlock.status === 'streaming' &&
-                draftBlock.content.length > 300 &&
-                draftBlock.content.length < 310
-                  ? true
-                  : draftBlock.isVisible,
-              status: 'streaming',
-            };
-          case 'spreadsheet-delta':
-            return {
-              ...draftBlock,
-              content: delta.content as string,
-              isVisible: true,
-              status: 'streaming',
-            };
-
-          case 'clear':
-            return {
-              ...draftBlock,
-              content: '',
-              status: 'streaming',
-            };
-
-          case 'finish':
-            return {
-              ...draftBlock,
-              status: 'idle',
-            };
-
-          case 'activity-delta':
-            const activity = delta.content as {
-              type: 'search' | 'extract' | 'analyze' | 'thought' | 'reasoning';
-              status: 'pending' | 'complete' | 'error';
-              message: string;
-              timestamp: string;
-            };
-            console.log("Adding activity:", activity); // Debug log
-            addActivity(activity);
-            return {
-              ...draftBlock,
-              status: 'streaming',
-            };
-
-          case 'source-delta':
-            const source = delta.content as {
-              url: string;
-              title: string;
-              relevance: number;
-            };
-            console.log("Adding source:", source); // Debug log
-            addSource(source);
-            return {
-              ...draftBlock,
-              status: 'streaming',
-            };
-
-          default:
-            return draftBlock;
-        }
-      });
-    });
+    } catch (error) {
+      console.error("Error processing data stream:", error);
+    }
   }, [
     dataStream,
     setBlock,

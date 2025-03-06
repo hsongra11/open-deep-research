@@ -4,7 +4,7 @@ import { isToday, isYesterday, subMonths, subWeeks } from 'date-fns';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import type { User } from 'next-auth';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useState, useRef } from 'react';
 import { toast } from 'sonner';
 import useSWR from 'swr';
 
@@ -153,21 +153,44 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   const { setOpenMobile } = useSidebar();
   const { id } = useParams();
   const pathname = usePathname();
+  const router = useRouter();
   const {
     data: history,
     isLoading,
     mutate,
-  } = useSWR<Array<Chat>>(user ? '/api/history' : null, fetcher, {
-    fallbackData: [],
-  });
+  } = useSWR<Array<Chat>>(
+    user ? '/api/history' : null, 
+    fetcher, 
+    {
+      fallbackData: [],
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 5000,
+      focusThrottleInterval: 10000,
+      revalidateIfStale: false,
+      revalidateOnMount: true
+    }
+  );
 
+  const prevPathname = useRef(pathname);
+  const prevId = useRef(id);
+  
   useEffect(() => {
-    mutate();
-  }, [pathname, mutate]);
+    if (
+      user && 
+      ((pathname?.includes('/chat/') && prevPathname.current !== pathname) ||
+       (prevId.current !== id && (id || prevId.current)))
+    ) {
+      console.log("Reloading history due to significant navigation"); 
+      mutate();
+      prevPathname.current = pathname;
+      prevId.current = id;
+    }
+  }, [pathname, id, mutate, user]);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const router = useRouter();
+
   const handleDelete = async () => {
     const deletePromise = fetch(`/api/chat?id=${deleteId}`, {
       method: 'DELETE',

@@ -17,14 +17,15 @@ export const authConfig = {
       const isOnAuthPages = isOnLogin || isOnRegister;
       const isOnPublicPage = nextUrl.pathname === '/';
 
-      // Redirect authenticated users away from auth pages
+      // Only redirect authenticated users away from auth pages if they are explicitly on those pages
+      // This prevents redirect loops when the middleware captures other paths
       if (isLoggedIn && isOnAuthPages) {
-        return Response.redirect(new URL('/', nextUrl as unknown as URL));
+        return Response.redirect(new URL('/', nextUrl));
       }
 
-      // Allow public access only to public pages and auth pages
+      // Only redirect unauthenticated users to login for non-public pages
       if (!isLoggedIn && !isOnAuthPages && !isOnPublicPage) {
-        return Response.redirect(new URL('/login', nextUrl as unknown as URL));
+        return Response.redirect(new URL('/login', nextUrl));
       }
 
       return true;
