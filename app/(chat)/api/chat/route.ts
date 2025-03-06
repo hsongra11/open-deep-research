@@ -58,7 +58,7 @@ const app = new HyperResearchApp({
 export async function POST(request: Request) {
   const maxDuration = process.env.MAX_DURATION
     ? parseInt(process.env.MAX_DURATION)
-    : 300; 
+    : 60; // Reduced from 300 to 60 seconds for Vercel compatibility
   
   const {
     id,
@@ -630,7 +630,52 @@ export async function POST(request: Request) {
                   topic = analysis.gaps.shift() || topic;
                 }
 
-                // Final synthesis - Use a more efficient prompt
+                // Check if we're approaching the time limit before starting synthesis
+                const timeBeforeSynthesis = Date.now() - startTime;
+                const remainingTime = timeLimit - timeBeforeSynthesis;
+                
+                // If we have less than 30 seconds left, send a simplified synthesis
+                if (remainingTime < 30 * 1000) {
+                  console.log("Critical time limit approaching, sending rapid synthesis");
+                  
+                  addActivity({
+                    type: 'thought',
+                    status: 'complete',
+                    message: `Time limit reached, providing quick summary of findings...`,
+                    timestamp: new Date().toISOString(),
+                    depth: researchState.currentDepth,
+                  });
+                  
+                  // Just use the existing summaries instead of generating new synthesis
+                  const quickSummary = researchState.summaries.length > 0 
+                    ? researchState.summaries.join("\n\n")
+                    : `Research on "${topic}" was started but couldn't be completed within the time limit. Please try again with a more specific query.`;
+                  
+                  dataStream.writeData({
+                    type: 'finish',
+                    content: quickSummary,
+                  });
+                  
+                  addActivity({
+                    type: 'synthesis',
+                    status: 'complete',
+                    message: 'Research completed with quick summary due to time constraints',
+                    timestamp: new Date().toISOString(),
+                    depth: researchState.currentDepth,
+                  });
+                  
+                  return {
+                    success: true,
+                    data: {
+                      findings: researchState.findings,
+                      analysis: quickSummary,
+                      completedSteps: researchState.completedSteps,
+                      totalSteps: researchState.totalExpectedSteps,
+                    },
+                  };
+                }
+
+                // Standard synthesis - but with extreme optimization
                 addActivity({
                   type: 'synthesis',
                   status: 'pending',
@@ -639,45 +684,80 @@ export async function POST(request: Request) {
                   depth: researchState.currentDepth,
                 });
 
-                // Limit the amount of data we're processing in the final synthesis
-                const limitedFindings = researchState.findings.slice(0, 10);
-                const limitedSummaries = researchState.summaries.slice(-3);
+                // Super-limit the amount of data we're processing in the final synthesis
+                const limitedFindings = researchState.findings.slice(0, 5);
+                const limitedSummaries = researchState.summaries.slice(-2);
                 
-                const finalAnalysis = await generateText({
-                  model: customModel(reasoningModel.apiIdentifier, true),
-                  maxTokens: 4000, // Limit token usage
-                  prompt: `Create a concise but comprehensive analysis of ${topic} based on these findings:
-                          ${limitedFindings
-                      .map((f) => `[From ${f.source}]: ${f.text}`)
-                      .join('\n')}
-                          ${limitedSummaries
-                            .map((s) => `[Summary]: ${s}`)
-                            .join('\n')}
-                          Provide key insights, main conclusions, and remaining uncertainties. Include citations to sources where relevant. Be thorough but focused.`,
-                });
+                try {
+                  // Set a tight timeout for the generateText operation
+                  const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error("Synthesis timed out")), 20000); // 20-second timeout
+                  });
+                  
+                  // Race between the actual synthesis and the timeout
+                  const finalAnalysis = await Promise.race([
+                    generateText({
+                      model: customModel(reasoningModel.apiIdentifier, true),
+                      maxTokens: 2000, // Severely limit token usage
+                      prompt: `Create a brief summary of findings about ${topic}:
+                              ${limitedSummaries.join('\n')}
+                              Focus only on key points and main insights. Be concise.`,
+                    }),
+                    timeoutPromise
+                  ]).catch(error => {
+                    console.error("Synthesis error:", error.message);
+                    // Return a basic analysis if the timeout was hit
+                    return { text: `Research on "${topic}" found several relevant sources. Main findings include: ${limitedSummaries.join('. ')}` };
+                  });
 
-                addActivity({
-                  type: 'synthesis',
-                  status: 'complete',
-                  message: 'Research completed',
-                  timestamp: new Date().toISOString(),
-                  depth: researchState.currentDepth,
-                });
+                  addActivity({
+                    type: 'synthesis',
+                    status: 'complete',
+                    message: 'Research completed',
+                    timestamp: new Date().toISOString(),
+                    depth: researchState.currentDepth,
+                  });
 
-                dataStream.writeData({
-                  type: 'finish',
-                  content: finalAnalysis.text,
-                });
+                  // Handle the case where finalAnalysis might be an object with text property or just a string
+                  const synthesisText = typeof finalAnalysis === 'object' && finalAnalysis !== null && 'text' in finalAnalysis 
+                    ? finalAnalysis.text as string
+                    : String(finalAnalysis);
 
-                return {
-                  success: true,
-                  data: {
-                    findings: researchState.findings,
-                    analysis: finalAnalysis.text,
-                    completedSteps: researchState.completedSteps,
-                    totalSteps: researchState.totalExpectedSteps,
-                  },
-                };
+                  dataStream.writeData({
+                    type: 'finish',
+                    content: synthesisText,
+                  });
+
+                  return {
+                    success: true,
+                    data: {
+                      findings: researchState.findings,
+                      analysis: synthesisText,
+                      completedSteps: researchState.completedSteps,
+                      totalSteps: researchState.totalExpectedSteps,
+                    },
+                  };
+                } catch (error) {
+                  console.error("Failed to generate synthesis:", error);
+                  
+                  // Fallback synthesis using just the summaries
+                  const fallbackSynthesis = `Research on "${topic}" found several relevant sources. Key findings: ${limitedSummaries.join('. ')}`;
+                  
+                  dataStream.writeData({
+                    type: 'finish',
+                    content: fallbackSynthesis,
+                  });
+                  
+                  return {
+                    success: true,
+                    data: {
+                      findings: researchState.findings,
+                      analysis: fallbackSynthesis,
+                      completedSteps: researchState.completedSteps,
+                      totalSteps: researchState.totalExpectedSteps,
+                    },
+                  };
+                }
               } catch (error: any) {
                 console.error('Deep research error:', error);
 
