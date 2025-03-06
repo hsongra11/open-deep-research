@@ -42,12 +42,17 @@ export const login = async (
       }
       
       console.log("User found, attempting to sign in");
-      await signIn('credentials', {
+      // Use fallback client-side redirect if server redirect fails
+      const result = await signIn('credentials', {
         email: validatedData.email,
         password: validatedData.password,
-        redirect: true,
-        callbackUrl: '/'
+        redirect: false
       });
+      
+      if (result?.error) {
+        console.error("Login error:", result.error);
+        return { status: 'failed' };
+      }
       
       console.log("Login successful");
       return { status: 'success' };

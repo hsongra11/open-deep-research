@@ -5,6 +5,7 @@ import { PT_Serif } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Analytics } from '@vercel/analytics/react';
 import { HyperResearchProvider } from '@/lib/deep-research-context';
+// Import the AuthProvider directly
 import { AuthProvider } from '@/components/auth-provider';
 
 import './globals.css';
