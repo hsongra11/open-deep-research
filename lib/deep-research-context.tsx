@@ -28,7 +28,7 @@ interface SourceItem {
   relevance: number;
 }
 
-interface DeepResearchState {
+interface HyperResearchState {
   isActive: boolean;
   activity: ActivityItem[];
   sources: SourceItem[];
@@ -38,7 +38,7 @@ interface DeepResearchState {
   totalExpectedSteps: number;
 }
 
-type DeepResearchAction =
+type HyperResearchAction =
   | { type: 'TOGGLE_ACTIVE' }
   | { type: 'SET_ACTIVE'; payload: boolean }
   | {
@@ -51,8 +51,8 @@ type DeepResearchAction =
   | { type: 'UPDATE_PROGRESS'; payload: { completed: number; total: number } }
   | { type: 'CLEAR_STATE' };
 
-interface DeepResearchContextType {
-  state: DeepResearchState;
+interface HyperResearchContextType {
+  state: HyperResearchState;
   toggleActive: () => void;
   setActive: (active: boolean) => void;
   addActivity: (
@@ -65,58 +65,73 @@ interface DeepResearchContextType {
   clearState: () => void;
 }
 
-const initialState: DeepResearchState = {
-  isActive: true,
+const initialState: HyperResearchState = {
+  isActive: false,
   activity: [],
   sources: [],
   currentDepth: 0,
-  maxDepth: 7,
+  maxDepth: 0,
   completedSteps: 0,
   totalExpectedSteps: 0,
 };
 
-function deepResearchReducer(
-  state: DeepResearchState,
-  action: DeepResearchAction,
-): DeepResearchState {
+const HyperResearchContext = createContext<HyperResearchContextType | undefined>(
+  undefined,
+);
+
+function hyperResearchReducer(
+  state: HyperResearchState,
+  action: HyperResearchAction,
+): HyperResearchState {
   switch (action.type) {
     case 'TOGGLE_ACTIVE':
       return {
         ...state,
         isActive: !state.isActive,
-        ...(state.isActive && {
-          activity: [],
-          sources: [],
-          currentDepth: 0,
-          completedSteps: 0,
-          totalExpectedSteps: 0,
-        }),
       };
     case 'SET_ACTIVE':
       return {
         ...state,
         isActive: action.payload,
-        ...(action.payload === false && {
-          activity: [],
-          sources: [],
-          currentDepth: 0,
-          completedSteps: 0,
-          totalExpectedSteps: 0,
-        }),
       };
     case 'ADD_ACTIVITY':
+      // Update progress if provided
+      const updatedProgress =
+        action.payload.completedSteps !== undefined &&
+        action.payload.totalSteps !== undefined
+          ? {
+              completedSteps: action.payload.completedSteps,
+              totalExpectedSteps: action.payload.totalSteps,
+            }
+          : {};
+
+      // Only add if the message doesn't already exist
+      const isDuplicate = state.activity.some(
+        (item) => item.message === action.payload.message,
+      );
+
+      if (isDuplicate) {
+        return {
+          ...state,
+          ...updatedProgress,
+        };
+      }
+
       return {
         ...state,
         activity: [...state.activity, action.payload],
-        completedSteps:
-          action.payload.completedSteps ??
-          (action.payload.status === 'complete'
-            ? state.completedSteps + 1
-            : state.completedSteps),
-        totalExpectedSteps:
-          action.payload.totalSteps ?? state.totalExpectedSteps,
+        ...updatedProgress,
       };
     case 'ADD_SOURCE':
+      // Check if we already have this source
+      const sourceExists = state.sources.some(
+        (s) => s.url === action.payload.url,
+      );
+
+      if (sourceExists) {
+        return state;
+      }
+
       return {
         ...state,
         sources: [...state.sources, action.payload],
@@ -133,7 +148,6 @@ function deepResearchReducer(
         maxDepth: action.payload.maxDepth,
         totalExpectedSteps: action.payload.totalSteps,
         completedSteps: 0,
-        currentDepth: 0,
       };
     case 'UPDATE_PROGRESS':
       return {
@@ -144,23 +158,14 @@ function deepResearchReducer(
     case 'CLEAR_STATE':
       return {
         ...initialState,
-        activity: [],
-        sources: [],
-        currentDepth: 0,
-        completedSteps: 0,
-        totalExpectedSteps: 0,
       };
     default:
       return state;
   }
 }
 
-const DeepResearchContext = createContext<DeepResearchContextType | undefined>(
-  undefined,
-);
-
-export function DeepResearchProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(deepResearchReducer, initialState);
+export function HyperResearchProvider({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(hyperResearchReducer, initialState);
 
   const toggleActive = useCallback(() => {
     dispatch({ type: 'TOGGLE_ACTIVE' });
@@ -172,7 +177,10 @@ export function DeepResearchProvider({ children }: { children: ReactNode }) {
 
   const addActivity = useCallback(
     (
-      activity: ActivityItem & { completedSteps?: number; totalSteps?: number },
+      activity: ActivityItem & {
+        completedSteps?: number;
+        totalSteps?: number;
+      },
     ) => {
       dispatch({ type: 'ADD_ACTIVITY', payload: activity });
     },
@@ -188,11 +196,17 @@ export function DeepResearchProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const initProgress = useCallback((maxDepth: number, totalSteps: number) => {
-    dispatch({ type: 'INIT_PROGRESS', payload: { maxDepth, totalSteps } });
+    dispatch({
+      type: 'INIT_PROGRESS',
+      payload: { maxDepth, totalSteps },
+    });
   }, []);
 
   const updateProgress = useCallback((completed: number, total: number) => {
-    dispatch({ type: 'UPDATE_PROGRESS', payload: { completed, total } });
+    dispatch({
+      type: 'UPDATE_PROGRESS',
+      payload: { completed, total },
+    });
   }, []);
 
   const clearState = useCallback(() => {
@@ -200,7 +214,7 @@ export function DeepResearchProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <DeepResearchContext.Provider
+    <HyperResearchContext.Provider
       value={{
         state,
         toggleActive,
@@ -214,16 +228,21 @@ export function DeepResearchProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-    </DeepResearchContext.Provider>
+    </HyperResearchContext.Provider>
   );
 }
 
-export function useDeepResearch() {
-  const context = useContext(DeepResearchContext);
+export function useHyperResearch() {
+  const context = useContext(HyperResearchContext);
   if (context === undefined) {
     throw new Error(
-      'useDeepResearch must be used within a DeepResearchProvider',
+      'useHyperResearch must be used within a HyperResearchProvider',
     );
   }
   return context;
+}
+
+// For backward compatibility, maintain the old function name as an alias
+export function useDeepResearch() {
+  return useHyperResearch();
 }

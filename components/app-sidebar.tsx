@@ -35,19 +35,19 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                 }}
                 className="flex flex-row gap-3 items-center"
               >
-                <span className="text-lg font-semibold hover:bg-muted  rounded-md cursor-pointer">
-                  Deep Research
+                <span className="text-lg font-semibold hover:bg-muted rounded-md cursor-pointer">
+                  HyperResearch
                 </span>
               </Link>
               <Link
-                href="https://firecrawl.dev/"
+                href="https://hyperresearch.dev/"
                 onClick={() => {
                   setOpenMobile(false);
                 }}
                 className="flex flex-row gap-3 items-center"
               >
                 <span className="text-sm text-muted-foreground leading-3">
-                  by Firecrawl 🔥
+                  by HyperResearch
                 </span>
               </Link>
             </div>

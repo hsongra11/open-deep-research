@@ -36,7 +36,7 @@ import {
 } from '@/lib/utils';
 
 import { generateTitleFromUserMessage } from '../../actions';
-import FirecrawlApp from '@mendable/firecrawl-js';
+import HyperResearchApp from '@mendable/firecrawl-js';
 
 type AllowedTools =
   | 'deepResearch'
@@ -45,11 +45,11 @@ type AllowedTools =
   | 'scrape';
 
 
-const firecrawlTools: AllowedTools[] = ['search', 'extract', 'scrape'];
+const hyperResearchTools: AllowedTools[] = ['search', 'extract', 'scrape'];
 
-const allTools: AllowedTools[] = [...firecrawlTools, 'deepResearch'];
+const allTools: AllowedTools[] = [...hyperResearchTools, 'deepResearch'];
 
-const app = new FirecrawlApp({
+const app = new HyperResearchApp({
   apiKey: process.env.FIRECRAWL_API_KEY || '',
 });
 
@@ -186,7 +186,7 @@ export async function POST(request: Request) {
         system: systemPrompt,
         messages: coreMessages,
         maxSteps: 10,
-        experimental_activeTools: experimental_deepResearch ? allTools : firecrawlTools,
+        experimental_activeTools: experimental_deepResearch ? allTools : hyperResearchTools,
         tools: {
           search: {
             description:

@@ -1,15 +1,22 @@
 import type { Metadata } from 'next';
 import { Toaster } from 'sonner';
+import { PT_Serif } from 'next/font/google';
 
 import { ThemeProvider } from '@/components/theme-provider';
 import { Analytics } from '@vercel/analytics/react';
-import { DeepResearchProvider } from '@/lib/deep-research-context';
+import { HyperResearchProvider } from '@/lib/deep-research-context';
 
 import './globals.css';
 
+const ptSerif = PT_Serif({
+  weight: ['400', '700'],
+  subsets: ['latin'],
+  variable: '--font-pt-serif',
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL('https://extract.chat'),
-  title: 'Extract Chat - by Firecrawl',
+  title: 'Extract Chat - by HyperResearch',
   description:
     'Extract Chat allows you to extract information from any website with the help of an AI chatbot.',
 };
@@ -46,6 +53,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
+      className={ptSerif.variable}
       // `next-themes` injects an extra classname to the body element to avoid
       // visual flicker before hydration. Hence the `suppressHydrationWarning`
       // prop is necessary to avoid the React hydration mismatch warning.
@@ -62,14 +70,15 @@ export default async function RootLayout({
       <body className="antialiased">
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
+          forcedTheme="dark"
         >
-          <DeepResearchProvider>
+          <HyperResearchProvider>
             <Toaster position="top-center" />
             {children}
-          </DeepResearchProvider>
+          </HyperResearchProvider>
         </ThemeProvider>
         <Analytics />
       </body>

@@ -49,8 +49,13 @@ export function DataStreamHandler({ id }: { id: string }) {
   const { data: dataStream } = useChat({ id });
   const { setUserMessageIdFromServer } = useUserMessageId();
   const { setBlock } = useBlock();
-  const { addActivity, addSource } = useDeepResearch();
+  const { addActivity, addSource, state } = useDeepResearch();
   const lastProcessedIndex = useRef(-1);
+
+  // Debug: Log the deep research state to see if it's being updated
+  useEffect(() => {
+    console.log("DataStreamHandler: Deep Research State:", state);
+  }, [state]);
 
   useEffect(() => {
     if (!dataStream?.length) return;
@@ -144,6 +149,7 @@ export function DataStreamHandler({ id }: { id: string }) {
               message: string;
               timestamp: string;
             };
+            console.log("Adding activity:", activity); // Debug log
             addActivity(activity);
             return {
               ...draftBlock,
@@ -156,6 +162,7 @@ export function DataStreamHandler({ id }: { id: string }) {
               title: string;
               relevance: number;
             };
+            console.log("Adding source:", source); // Debug log
             addSource(source);
             return {
               ...draftBlock,

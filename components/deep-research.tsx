@@ -37,7 +37,7 @@ export function DeepResearch({
   }
 
   return (
-    <div className="fixed right-4 top-20 w-80 bg-background border rounded-lg shadow-lg p-4 max-h-[80vh] flex flex-col overflow-y-scroll">
+    <div className="w-80 bg-background border rounded-lg shadow-lg p-4 max-h-[80vh] flex flex-col overflow-y-auto deep-research-panel">
       <Tabs defaultValue={deepResearch ? "activity" : "sources"} className="flex flex-col h-full">
         <TabsList className="w-full">
           {deepResearch && <TabsTrigger value="activity" className="flex-1">
