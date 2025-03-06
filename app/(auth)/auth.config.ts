@@ -2,7 +2,8 @@ import type { NextAuthConfig } from 'next-auth';
 
 export const authConfig = {
   pages: {
-    newUser: '/',
+    signIn: '/login',
+    newUser: '/register',
   },
   providers: [
     // added later in auth.ts since it requires bcrypt which is only compatible with Node.js
@@ -13,13 +14,19 @@ export const authConfig = {
       const isLoggedIn = !!auth?.user;
       const isOnRegister = nextUrl.pathname.startsWith('/register');
       const isOnLogin = nextUrl.pathname.startsWith('/login');
+      const isOnAuthPages = isOnLogin || isOnRegister;
+      const isOnPublicPage = nextUrl.pathname === '/';
 
       // Redirect authenticated users away from auth pages
-      if (isLoggedIn && (isOnLogin || isOnRegister)) {
+      if (isLoggedIn && isOnAuthPages) {
         return Response.redirect(new URL('/', nextUrl as unknown as URL));
       }
 
-      // Allow access to everything
+      // Allow public access only to public pages and auth pages
+      if (!isLoggedIn && !isOnAuthPages && !isOnPublicPage) {
+        return Response.redirect(new URL('/login', nextUrl as unknown as URL));
+      }
+
       return true;
     },
   },

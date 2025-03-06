@@ -35,14 +35,64 @@ export async function getUser(email: string): Promise<Array<User>> {
   }
 }
 
-export async function createUser(email: string, password: string) {
+export async function getUserByUsername(username: string): Promise<Array<User>> {
+  try {
+    // First check if username column exists by querying the database schema
+    try {
+      const query = `
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name='User' AND column_name='username'
+      `;
+      const result = await client.unsafe(query);
+      
+      // If the column exists, query by username
+      if (result.length > 0) {
+        return await db.select().from(user).where(eq(user.username, username));
+      } else {
+        // Username column doesn't exist, return empty array (no match)
+        console.warn("Username column doesn't exist in database");
+        return [];
+      }
+    } catch (error) {
+      // If any error occurs, return empty array to indicate no user found
+      console.warn("Failed to query by username:", error);
+      return [];
+    }
+  } catch (error) {
+    console.error('Failed to get user by username from database:', error);
+    throw error;
+  }
+}
+
+export async function createUser(email: string, password: string, username?: string) {
   const salt = genSaltSync(10);
   const hash = hashSync(password, salt);
 
   try {
-    return await db.insert(user).values({ email, password: hash });
+    // First check if username column exists by querying the database schema
+    let hasUsernameColumn = false;
+    try {
+      const query = `
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name='User' AND column_name='username'
+      `;
+      const result = await client.unsafe(query);
+      hasUsernameColumn = result.length > 0;
+    } catch (error) {
+      console.warn("Failed to check if username column exists:", error);
+    }
+
+    // Insert user with or without username based on column existence
+    if (hasUsernameColumn && username) {
+      return await db.insert(user).values({ email, password: hash, username });
+    } else {
+      // Insert without username
+      return await db.insert(user).values({ email, password: hash });
+    }
   } catch (error) {
-    console.error('Failed to create user in database');
+    console.error('Failed to create user in database:', error);
     throw error;
   }
 }

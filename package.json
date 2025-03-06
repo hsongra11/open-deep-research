@@ -15,7 +15,10 @@
     "db:push": "drizzle-kit push",
     "db:pull": "drizzle-kit pull",
     "db:check": "drizzle-kit check",
-    "db:up": "drizzle-kit up"
+    "db:up": "drizzle-kit up",
+    "db:add-username": "node scripts/add-username-column.js",
+    "db:fix-username": "node scripts/direct-add-username.js",
+    "db:quick-fix": "node scripts/fix-username-column.js"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^0.1.8",

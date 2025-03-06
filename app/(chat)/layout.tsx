@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 
 import { AppSidebar } from '@/components/app-sidebar';
+import { LoginWall } from '@/components/login-wall';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { DeepResearchView } from '@/components/deep-research-view';
 
@@ -16,6 +17,7 @@ export default async function Layout({
 }) {
   const [session, cookieStore] = await Promise.all([auth(), cookies()]);
   const isCollapsed = cookieStore.get('sidebar:state')?.value !== 'true';
+  const isLoggedIn = !!session?.user;
 
   return (
     <>
@@ -25,8 +27,10 @@ export default async function Layout({
       />
       <SidebarProvider defaultOpen={!isCollapsed}>
         <AppSidebar user={session?.user} />
-        <SidebarInset>{children}</SidebarInset>
-        <DeepResearchView />
+        <SidebarInset>
+          {isLoggedIn ? children : <LoginWall />}
+        </SidebarInset>
+        {isLoggedIn && <DeepResearchView />}
       </SidebarProvider>
     </>
   );

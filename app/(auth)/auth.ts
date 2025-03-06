@@ -6,15 +6,16 @@ import { getUser, createUser } from '@/lib/db/queries';
 import { authConfig } from './auth.config';
 
 interface ExtendedSession extends Session {
-  user: User;
+  user: User & { username?: string };
 }
 
+// This function is kept for backwards compatibility but will no longer be used
 async function createAnonymousUser() {
   const anonymousEmail = `anon_${Date.now()}@anonymous.user`;
   const anonymousPassword = `anon_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
   try {
-    // First create the user
+    // First create the user without username to be compatible with existing database
     await createUser(anonymousEmail, anonymousPassword);
     
     // Then verify the user was created by fetching it
@@ -40,9 +41,9 @@ export const {
       credentials: {},
       async authorize({ email, password }: any) {
         try {
-          // Handle anonymous access
-          if (!email && !password) {
-            return await createAnonymousUser();
+          // No longer supporting anonymous access
+          if (!email || !password) {
+            return null;
           }
 
           // Handle regular authentication
@@ -53,7 +54,14 @@ export const {
           const passwordsMatch = await compare(password, users[0].password!);
           if (!passwordsMatch) return null;
           
-          return users[0] as any;
+          // Add fallback for username if it doesn't exist
+          const user = {
+            ...users[0],
+            username: users[0].username || email.split('@')[0] // Use part of email as fallback username
+          };
+          
+          console.log("User authenticated:", user.email);
+          return user as any;
         } catch (error) {
           console.error('Authentication failed:', error);
           return null;
@@ -61,6 +69,11 @@ export const {
       },
     }),
   ],
+  pages: {
+    signIn: '/login',
+    signOut: '/',
+    error: '/login', // Error code passed in query string as ?error=
+  },
   // Add proxy configuration for Docker environment
   cookies: {
     sessionToken: {
@@ -73,20 +86,18 @@ export const {
       },
     },
   },
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  debug: process.env.NODE_ENV === 'development',
   trustHost: true,
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-      } else if (!token.id) {
-        // Create anonymous user if no user exists
-        const anonymousUser = await createAnonymousUser();
-        if (anonymousUser) {
-          token.id = anonymousUser.id;
-          token.email = anonymousUser.email;
-        }
+        token.username = (user as any).username;
       }
-
       return token;
     },
     async session({
@@ -99,6 +110,7 @@ export const {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.email = token.email as string;
+        session.user.username = token.username as string;
       }
 
       return session;

@@ -6,6 +6,7 @@ import { useActionState, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AuthForm } from '@/components/auth-form';
+import { AuthHeader } from '@/components/auth-header';
 import { SubmitButton } from '@/components/submit-button';
 import { Button } from '@/components/ui/button';
 
@@ -31,7 +32,15 @@ export default function Page() {
       toast.error('Failed validating your submission!');
     } else if (state.status === 'success') {
       setIsSuccessful(true);
-      router.refresh();
+      
+      // Force redirect to homepage after login
+      toast.success('Login successful! Redirecting...');
+      
+      // Add a slight delay to ensure the session is properly set
+      setTimeout(() => {
+        router.push('/');
+        router.refresh();
+      }, 1000);
     }
   }, [state.status, router]);
 
@@ -53,6 +62,7 @@ export default function Page() {
 
   return (
     <div className="flex h-dvh w-screen items-start pt-12 md:pt-0 md:items-center justify-center bg-background">
+      <AuthHeader />
       <div className="w-full max-w-md overflow-hidden rounded-2xl flex flex-col gap-12">
         <div className="flex flex-col items-center justify-center gap-2 px-4 text-center sm:px-16">
           <h3 className="text-xl font-semibold dark:text-zinc-50">Sign In</h3>
